@@ -10,8 +10,8 @@ from tools.json_object_generator_tool import JsonObjectGeneratorTool
 
 class PodcastPremiseTool(JsonObjectGeneratorTool):    
     class Output(BaseModel):
-        podcast_name: str = Field(alias="Podcast Name")
-        podcast_description: str = Field(alias="Podcast Description")
+        podcast_name: str = Field()
+        podcast_description: str = Field()
 
     name: str = "PodcastPremiseTool"
     human_description: str = "Generates a premise for a podcast."
@@ -23,7 +23,7 @@ class PodcastPremiseTool(JsonObjectGeneratorTool):
     )
 
     table_description: str = "podcasts"
-    header_fields: List[str] = ["Podcast Name", "Podcast Description"]
+    header_fields: List[str] = ["podcast_name", "podcast_description"]
     example_rows: List[List[str]] = [
         ["Animal Planet", "The world is an amazing place. We'll tell you its stories every day."],
         ["Banking News", "All the updates you need to track the banking world."],

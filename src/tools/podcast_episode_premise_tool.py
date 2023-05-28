@@ -2,6 +2,7 @@ from typing import List, Union, Any
 from steamship import Steamship, Block, Task
 from repl import ToolREPL
 import json
+from pydantic import Field
 from steamship.agents.schema import AgentContext, Tool
 from steamship.agents.utils import get_llm, with_llm
 from steamship.agents.llms import OpenAI
@@ -9,6 +10,10 @@ from tools.podcast_premise_tool import PodcastPremiseTool
 from tools.json_object_generator_tool import JsonObjectGeneratorTool
 
 class PodcastEpisodePremiseTool(JsonObjectGeneratorTool):    
+    class Output(PodcastPremiseTool.Output):
+        episode_name: str = Field()
+        episode_description: str = Field()
+
     name: str = "PodcastEpisodePremiseTool"
     human_description: str = "Generates a premise for a podcast episode."
     agent_description: str = (
@@ -19,7 +24,7 @@ class PodcastEpisodePremiseTool(JsonObjectGeneratorTool):
     )
 
     table_description: str = "podcast episodes"
-    header_fields: List[str] = ["Podcast Name", "Episode Name", "Episode Description"]
+    header_fields: List[str] = ["podcast_name", "episode_name", "episode_description"]
     example_rows: List[List[str]] = [
       ["Animal Planet", "Wolverines", "What Wolverines eat in the wild."],
       ["Banking News", "Today's Banking News", "All the updates you need to track the banking world."],
@@ -29,10 +34,6 @@ class PodcastEpisodePremiseTool(JsonObjectGeneratorTool):
       ["Car Talk", "A Man. A Sedan. A Mystery.",
       "A caller from Boston has a car that turns off when me makes a left-hand turn."],
     ]
-
-    def __init__(self, podcast_name: str, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.new_row_prefix_fields = [podcast_name]
 
     def run(self, tool_input: List[Block], context: AgentContext) -> Union[List[Block], Task[Any]]:
         # Pull the premise.
@@ -44,9 +45,12 @@ class PodcastEpisodePremiseTool(JsonObjectGeneratorTool):
         # Set the prefix fields
         self.new_row_prefix_fields = [podcast_premise.podcast_name]
         
-        # Now just return the regular output.
+        # Now run the promopt
         blocks = super().run(tool_input, context)
 
+        # To make things easier we're going to fold in the output from the PodcastPremiseTool into 
+        # every output of this as well. This makes sure that this tool output stands on its own; we don't
+        # need some downstream tool to combine the output of multiple tools.
         for block in blocks:
             block_dict = json.loads(block.text)
             block_dict.update(podcast_premise.dict())
@@ -54,9 +58,14 @@ class PodcastEpisodePremiseTool(JsonObjectGeneratorTool):
         
         return blocks
 
+    def parse_final_output(self, block: Block) -> Output:
+        """Parses the final output"""
+        print(block.text)
+        return PodcastEpisodePremiseTool.Output.parse_obj(json.loads(block.text))
+
 
 if __name__ == "__main__":
     with Steamship.temporary_workspace() as client:
-        ToolREPL(PodcastEpisodePremiseTool("The Cheese Podcast")).run_with_client(
+        ToolREPL(PodcastEpisodePremiseTool()).run_with_client(
             client=client, context=with_llm(llm=OpenAI(client=client))
         )

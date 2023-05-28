@@ -1,11 +1,12 @@
-from typing import List
+from typing import List, Union, Any
 import json
-from steamship import Steamship
-from steamship.utils.repl import ToolREPL
+from steamship import Steamship, Block, Task
+from pydantic import Field
+from repl import ToolREPL
 from steamship.agents.schema import AgentContext, Tool
 from steamship.agents.utils import get_llm, with_llm
 from steamship.agents.llms import OpenAI
-from src.tools.podcast_episode_premise_tool import PodcastEpisodePremiseTool
+from tools.podcast_episode_premise_tool import PodcastEpisodePremiseTool
 from tools.json_object_generator_tool import JsonObjectGeneratorTool
 
 DEFAULT_PROMPT = """INSTRUCTIONS:
@@ -27,6 +28,9 @@ EPISODE DESCRIPTION:
 EPISODE TRANSCRIPT:"""
 
 class PodcastTranscriptGeneratorTool(Tool):    
+    class Output(PodcastEpisodePremiseTool.Output):
+        script: str = Field(alias="Script")
+    
     name: str = "PodcastTranscriptGeneratorTool"
     human_description: str = "Generates a transcript for a podcast episode."
     agent_description: str = (
@@ -52,40 +56,35 @@ class PodcastTranscriptGeneratorTool(Tool):
             A single block containing a new row of the table described by the tool's configuration.
         """
 
+        # Pull the premise.
+        # TODO: This reloads the previously generated one.
+        episode_premise_tool = PodcastEpisodePremiseTool()
+        episode_premise_blocks = episode_premise_tool.run([], context)
+        episode_premise: PodcastEpisodePremiseTool.Output = episode_premise_tool.parse_final_output(episode_premise_blocks[0])
+
         llm = get_llm(context)
 
-        blocks = []
-        for block in tool_input:
-            # If the block is not text, simply pass it through.
-            if not block.is_text():
-                continue
-                
-            # I gotta be honest: I'm not really sure how we can reasonably expect an LLM to provide
-            # properly formatted input. But I want to structure this AS IF IT WERE because I'm confident
-            # we'll figure it out.
-            #
-            # So! I'm assuming this will have the output.
-            input_json = json.loads(block.text)
+        prompt = DEFAULT_PROMPT.format(
+            podcast_title=episode_premise.podcast_name,
+            podcast_description=episode_premise.podcast_description,
+            episode_title=episode_premise.episode_name,
+            episode_description=episode_premise.episode_description,
+        )
 
-            podcast_title = input_json.get("Podcast Name", "")
-            podcast_description = input_json.get("Podcast Description", "")
-            episode_title = input_json.get("Episode Name", "")
-            episode_description = input_json.get("Episode Description", "")
+        blocks = llm.complete(prompt, stop="THE END")
+        block = blocks[0]
 
-            prompt = self.rewrite_prompt.format(
-                podcast_title=podcast_title,
-                podcast_description=podcast_description,
-                episode_title=episode_title,
-                episode_description=episode_description,
-            )
+        d = episode_premise.dict()
+        d["script"] = block.text
+        print(block.text)
 
-            res =  llm.complete(prompt, stop="}")
-            blocks.extend(res)
-        return blocks
+        block.text = json.dumps(d)
+        return [block]
+        
 
 
 if __name__ == "__main__":
     with Steamship.temporary_workspace() as client:
-        ToolREPL(PodcastTranscriptGeneratorTool("The Cheese Podcast")).run_with_client(
+        ToolREPL(PodcastTranscriptGeneratorTool()).run_with_client(
             client=client, context=with_llm(llm=OpenAI(client=client))
         )
