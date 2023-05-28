@@ -1,12 +1,18 @@
+import json
 from typing import List
-from steamship import Steamship
-from steamship.utils.repl import ToolREPL
+from pydantic import BaseModel, Field
+from steamship import Block, Steamship
+from repl import ToolREPL
 from steamship.agents.schema import AgentContext, Tool
 from steamship.agents.utils import get_llm, with_llm
 from steamship.agents.llms import OpenAI
-from tools.tsv_row_generator_tool import TsvRowGeneratorTool
+from tools.json_object_generator_tool import JsonObjectGeneratorTool
 
-class PodcastPremiseTool(TsvRowGeneratorTool):    
+class PodcastPremiseTool(JsonObjectGeneratorTool):    
+    class Output(BaseModel):
+        podcast_name: str = Field(alias="Podcast Name")
+        podcast_description: str = Field(alias="Podcast Description")
+
     name: str = "PodcastPremiseTool"
     human_description: str = "Generates a premise for a podcast."
     agent_description: str = (
@@ -26,6 +32,10 @@ class PodcastPremiseTool(TsvRowGeneratorTool):
         ["Politico", "Hear the opinions and analysis that shapes capitol hill."],
         ["Car Talk", "Call-in show with automotive mysteries, fix-it help, and laughter."],
     ]
+
+    def parse_final_output(self, block: Block) -> Output:
+        """Parses the final output"""
+        return PodcastPremiseTool.Output.parse_obj(json.loads(block.text))
 
 
 if __name__ == "__main__":

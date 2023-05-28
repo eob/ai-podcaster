@@ -2,10 +2,10 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Run Podcast Idea Tool",
+      "name": "Run Current File",
       "type": "python",
       "request": "launch",
-      "program": "${workspaceRoot}/src/tools/podcast_premise_tool.py",
+      "program": "${file}",
       "console": "integratedTerminal",
       "justMyCode": true,
       "env": {
