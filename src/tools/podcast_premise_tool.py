@@ -6,7 +6,7 @@ from repl import ToolREPL
 from steamship.agents.schema import AgentContext, Tool
 from steamship.agents.utils import get_llm, with_llm
 from steamship.agents.llms import OpenAI
-from tools.json_object_generator_tool import JsonObjectGeneratorTool
+from steamship.agents.tools.text_generation import JsonObjectGeneratorTool
 
 class PodcastPremiseTool(JsonObjectGeneratorTool):    
     class Output(BaseModel):
@@ -22,8 +22,8 @@ class PodcastPremiseTool(JsonObjectGeneratorTool):
         "Output: The name and description of a podcast the user could create."
     )
 
-    table_description: str = "podcasts"
-    header_fields: List[str] = ["podcast_name", "podcast_description"]
+    plural_object_description: str = "podcasts"
+    object_keys: List[str] = ["podcast_name", "podcast_description"]
     example_rows: List[List[str]] = [
         ["Animal Planet", "The world is an amazing place. We'll tell you its stories every day."],
         ["Banking News", "All the updates you need to track the banking world."],

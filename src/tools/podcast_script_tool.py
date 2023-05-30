@@ -7,7 +7,6 @@ from steamship.agents.schema import AgentContext, Tool
 from steamship.agents.utils import get_llm, with_llm
 from steamship.agents.llms import OpenAI
 from tools.podcast_episode_premise_tool import PodcastEpisodePremiseTool
-from tools.json_object_generator_tool import JsonObjectGeneratorTool
 
 DEFAULT_PROMPT = """INSTRUCTIONS:
 Generate a transcript for a two minute long podcast episode. 

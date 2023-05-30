@@ -7,7 +7,7 @@ from steamship.agents.schema import AgentContext, Tool
 from steamship.agents.utils import get_llm, with_llm
 from steamship.agents.llms import OpenAI
 from tools.podcast_premise_tool import PodcastPremiseTool
-from tools.json_object_generator_tool import JsonObjectGeneratorTool
+from steamship.agents.tools.text_generation import JsonObjectGeneratorTool
 
 class PodcastEpisodePremiseTool(JsonObjectGeneratorTool):    
     class Output(PodcastPremiseTool.Output):
@@ -23,8 +23,8 @@ class PodcastEpisodePremiseTool(JsonObjectGeneratorTool):
         "Output: The name and description of a podcast episode the user could create."
     )
 
-    table_description: str = "podcast episodes"
-    header_fields: List[str] = ["podcast_name", "episode_name", "episode_description"]
+    plural_object_description: str = "podcast episodes"
+    object_keys: List[str] = ["podcast_name", "episode_name", "episode_description"]
     example_rows: List[List[str]] = [
       ["Animal Planet", "Wolverines", "What Wolverines eat in the wild."],
       ["Banking News", "Today's Banking News", "All the updates you need to track the banking world."],
