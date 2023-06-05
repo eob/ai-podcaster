@@ -40,6 +40,15 @@ class PodcastPremiseTool(JsonObjectGeneratorTool):
         """Parses the final output"""
         return PodcastPremiseTool.Output.parse_obj(json.loads(block.text))
 
+    def run(self, tool_input: List[Block], context: AgentContext) -> Union[List[Block], Task[Any]]:
+        """If the premise has already been generated, use the cached version. Else generate a new one."""
+        premise = self.kv_store.get('podcast_premise')
+        if not premise:
+            premise = super().run(tool_input, context)
+            self.kv_store.set('podcast_premise', {"value": premise})
+            return premise
+        return premise.get("value")
+
     def __init__(self, kv_store: KeyValueStore):
         self.kv_store = kv_store
 
