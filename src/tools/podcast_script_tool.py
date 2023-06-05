@@ -27,6 +27,8 @@ EPISODE DESCRIPTION:
 EPISODE TRANSCRIPT:"""
 
 class PodcastTranscriptGeneratorTool(Tool):    
+    kv_store: KeyValueStore
+
     class Output(PodcastEpisodePremiseTool.Output):
         script: str = Field(alias="Script")
     
@@ -57,7 +59,7 @@ class PodcastTranscriptGeneratorTool(Tool):
 
         # Pull the premise.
         # TODO: This reloads the previously generated one.
-        episode_premise_tool = PodcastEpisodePremiseTool()
+        episode_premise_tool = PodcastEpisodePremiseTool(self.kv_store)
         episode_premise_blocks = episode_premise_tool.run([], context)
         episode_premise: PodcastEpisodePremiseTool.Output = episode_premise_tool.parse_final_output(episode_premise_blocks[0])
 
@@ -80,10 +82,13 @@ class PodcastTranscriptGeneratorTool(Tool):
         block.text = json.dumps(d)
         return [block]
         
+    def __init__(self, kv_store: KeyValueStore):
+        self.kv_store = kv_store
 
 
 if __name__ == "__main__":
     with Steamship.temporary_workspace() as client:
-        ToolREPL(PodcastTranscriptGeneratorTool()).run_with_client(
+        kv_store = KeyValueStore()
+        ToolREPL(PodcastTranscriptGeneratorTool(kv_store)).run_with_client(
             client=client, context=with_llm(llm=OpenAI(client=client))
         )

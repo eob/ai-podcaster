@@ -10,6 +10,8 @@ from tools.podcast_premise_tool import PodcastPremiseTool
 from steamship.agents.tools.text_generation import JsonObjectGeneratorTool
 
 class PodcastEpisodePremiseTool(JsonObjectGeneratorTool):    
+    kv_store: KeyValueStore
+
     class Output(PodcastPremiseTool.Output):
         episode_name: str = Field()
         episode_description: str = Field()
@@ -38,7 +40,7 @@ class PodcastEpisodePremiseTool(JsonObjectGeneratorTool):
     def run(self, tool_input: List[Block], context: AgentContext) -> Union[List[Block], Task[Any]]:
         # Pull the premise.
         # TODO: This reloads the previously generated one.
-        premise_tool = PodcastPremiseTool()
+        premise_tool = PodcastPremiseTool(self.kv_store)
         premise_blocks = premise_tool.run([], context)
         podcast_premise: PodcastPremiseTool.Output = premise_tool.parse_final_output(premise_blocks[0])
                 
@@ -63,9 +65,12 @@ class PodcastEpisodePremiseTool(JsonObjectGeneratorTool):
         print(block.text)
         return PodcastEpisodePremiseTool.Output.parse_obj(json.loads(block.text))
 
+    def __init__(self, kv_store: KeyValueStore):
+        self.kv_store = kv_store
 
 if __name__ == "__main__":
     with Steamship.temporary_workspace() as client:
-        ToolREPL(PodcastEpisodePremiseTool()).run_with_client(
+        kv_store = KeyValueStore()
+        ToolREPL(PodcastEpisodePremiseTool(kv_store)).run_with_client(
             client=client, context=with_llm(llm=OpenAI(client=client))
         )

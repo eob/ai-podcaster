@@ -7,8 +7,11 @@ from steamship.agents.schema import AgentContext, Tool
 from steamship.agents.utils import get_llm, with_llm
 from steamship.agents.llms import OpenAI
 from steamship.agents.tools.text_generation import JsonObjectGeneratorTool
+from steamship.utils.kv_store import KeyValueStore
 
-class PodcastPremiseTool(JsonObjectGeneratorTool):    
+class PodcastPremiseTool(JsonObjectGeneratorTool):  
+    kv_store: KeyValueStore
+
     class Output(BaseModel):
         podcast_name: str = Field()
         podcast_description: str = Field()
@@ -37,9 +40,12 @@ class PodcastPremiseTool(JsonObjectGeneratorTool):
         """Parses the final output"""
         return PodcastPremiseTool.Output.parse_obj(json.loads(block.text))
 
+    def __init__(self, kv_store: KeyValueStore):
+        self.kv_store = kv_store
 
 if __name__ == "__main__":
     with Steamship.temporary_workspace() as client:
-        ToolREPL(PodcastPremiseTool()).run_with_client(
+        kv_store = KeyValueStore()
+        ToolREPL(PodcastPremiseTool(kv_store)).run_with_client(
             client=client, context=with_llm(llm=OpenAI(client=client))
         )
