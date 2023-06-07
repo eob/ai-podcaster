@@ -43,6 +43,30 @@ class PodcastPremiseTool(JsonObjectGeneratorTool):
     def __init__(self, kv_store: KeyValueStore):
         self.kv_store = kv_store
 
+    def get_cached_result_for(self, Block, context: AgentContext) -> Union[List[Block], Task[Any]]:
+        """Returns the cached result for the block."""
+
+        self.kv_store.get(f"ToolCache-{self.name}")
+
+    def run(self, tool_input: List[Block], context: AgentContext) -> Union[List[Block], Task[Any]]:
+
+        prompt = DEFAULT_PROMPT.format(
+            podcast_title=episode_premise.podcast_name,
+            podcast_description=episode_premise.podcast_description,
+            episode_title=episode_premise.episode_name,
+            episode_description=episode_premise.episode_description,
+        )
+
+        blocks = llm.complete(prompt, stop="THE END")
+        block = blocks[0]
+
+        d = episode_premise.dict()
+        d["script"] = block.text
+        print(block.text)
+
+        block.text = json.dumps(d)
+        return [block]
+
 if __name__ == "__main__":
     with Steamship.temporary_workspace() as client:
         kv_store = KeyValueStore()
