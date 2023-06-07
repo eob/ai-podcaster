@@ -2,6 +2,8 @@ from typing import List, Union, Any
 import json
 from steamship import Steamship, Block, Task
 from pydantic import Field
+from steamship.utils.kv_store import KeyValueStore
+
 from repl import ToolREPL
 from steamship.agents.schema import AgentContext, Tool
 from steamship.agents.utils import get_llm, with_llm
@@ -57,8 +59,6 @@ class PodcastTranscriptGeneratorTool(Tool):
             A single block containing a new row of the table described by the tool's configuration.
         """
 
-        # Pull the premise.
-        # TODO: This reloads the previously generated one.
         episode_premise_tool = PodcastEpisodePremiseTool(self.kv_store)
         episode_premise_blocks = episode_premise_tool.run([], context)
         episode_premise: PodcastEpisodePremiseTool.Output = episode_premise_tool.parse_final_output(episode_premise_blocks[0])
