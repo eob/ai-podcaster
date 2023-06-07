@@ -1,7 +1,10 @@
+import hashlib
 import json
 from typing import List, Union, Any
 from pydantic import BaseModel, Field
 from steamship import Block, Steamship, Task
+
+from data.podcast_feed import FeedFile, RssFeed
 from repl import ToolREPL
 from steamship.agents.schema import AgentContext, Tool
 from steamship.agents.utils import get_llm, with_llm
@@ -24,6 +27,28 @@ class PodcastPremiseTool(JsonObjectGeneratorTool):
         podcast_name: str = Field()
         podcast_description: str = Field()
 
+        def feed_id(self) -> str:
+            """Return a Feed ID based on the name for this podcast."""
+            feed_id = hashlib.md5(self.podcast_name.encode()).hexdigest()
+            return feed_id
+
+        def get_or_create_feed_file(self, base_url: str, context: AgentContext) -> FeedFile:
+            """Gets or creates the persistent Podcast Feed File associated with this premise."""
+            feed_id = self.feed_id()
+            rss_feed = RssFeed(
+                title=self.podcast_name,
+                summary=self.podcast_description,
+                author="The AI Podcaster: github.com/eob/ai-podcaster"
+            )
+            feed_file = FeedFile.get_or_create(context.client, base_url, rss_feed)
+            return feed_file
+
+        @staticmethod
+        def from_block(block: Block) -> "Output":
+            podcast_premise = PodcastPremiseTool.Output.parse_obj(json.loads(block.text))
+            return podcast_premise
+            return podcast_premise
+
     name: str = "PodcastPremiseTool"
     human_description: str = "Generates a premise for a podcast."
     agent_description: str = (
@@ -43,6 +68,9 @@ class PodcastPremiseTool(JsonObjectGeneratorTool):
         ["Politico", "Hear the opinions and analysis that shapes capitol hill."],
         ["Car Talk", "Call-in show with automotive mysteries, fix-it help, and laughter."],
     ]
+
+    agent_instance_base_url: str
+    """The base URL of the agent instance."""
 
     def parse_final_output(self, block: Block) -> Output:
         """Parses the final output"""
@@ -68,6 +96,13 @@ class PodcastPremiseTool(JsonObjectGeneratorTool):
                     self.cache.set(block, output_block, context)
                     output.append(output_block)
 
+        for output_block in output:
+            # Test Creating a Feed File
+            podcast_premise = PodcastPremiseTool.Output.from_block(output_block)
+            feed_file = podcast_premise.get_or_create_feed_file(self.agent_instance_base_url, context=context)
+            rss = feed_file.to_rss(self.agent_instance_base_url, [])
+            print(rss)
+
         return output
 
 if __name__ == "__main__":
@@ -76,6 +111,6 @@ if __name__ == "__main__":
     To see the cache in action, provide a second (or third) input that is identical to the tool within the REPL.
     """
     with Steamship.temporary_workspace() as client:
-        ToolREPL(PodcastPremiseTool()).run_with_client(
+        ToolREPL(PodcastPremiseTool(agent_instance_base_url="https://example.org")).run_with_client(
             client=client, context=with_llm(llm=OpenAI(client=client))
         )

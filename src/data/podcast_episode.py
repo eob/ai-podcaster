@@ -1,14 +1,9 @@
 """Pydantic objects to describe a podcast feed."""
 
-from typing import Optional, Union, List, Tuple
-
 from typing import Optional, Union, List, Tuple, cast
 
 from steamship import File, Steamship, Block, Tag, DocTag, SteamshipError
 from steamship.data import TagKind, TagValueKey
-from steamship.data.workspace import SignedUrl
-
-from data.rss import Episode, Feed
 
 from pydantic import Field
 from steamship.base.model import CamelModel
@@ -70,7 +65,7 @@ class EpisodeFile:
 
     def mark_audio_complete(self) -> Optional[Tag]:
         """Returns the file tag that stores the episode metadata."""
-        Tag.create(
+        return Tag.create(
             self.file.client,
             file_id=self.file.id,
             kind=EpisodeFile.TAG_KIND,
@@ -84,13 +79,13 @@ class EpisodeFile:
                 return tag
         return None
 
-    def episode_obj(self) -> Episode:
+    def episode_obj(self) -> RssEpisode:
         """Returns the Episode object stored in this file."""
         tag = self.episode_tag()
         if tag is not None:
-            ep = Episode.parse_obj(tag.value)
+            ep = RssEpisode.parse_obj(tag.value)
         else:
-            ep = Episode()
+            ep = RssEpisode()
 
         ep.guid = self.file.id
         return ep
@@ -111,20 +106,20 @@ class EpisodeFile:
     @staticmethod
     def create(
         client: Steamship,
-        episode: Optional[Episode] = None,
+        rss_episode: Optional[RssEpisode] = None,
         content: Optional[Union[str, List[str]]] = "Episode Content",
     ) -> "EpisodeFile":
         blocks = []
 
-        if episode.title:
+        if rss_episode.title:
             blocks.append(Block(
-                text=episode.title,
+                text=rss_episode.title,
                 tags=[Tag(kind=TagKind.DOCUMENT, name=DocTag.TITLE)]
             ))
 
-        if episode.author:
+        if rss_episode.author:
             blocks.append(Block(
-                text=f"By {episode.author}",
+                text=f"By {rss_episode.author}",
                 tags=[Tag(kind=TagKind.DOCUMENT, name=DocTag.H2)]
             ))
 
@@ -142,7 +137,7 @@ class EpisodeFile:
         file = File.create(
             client,
             blocks=blocks,
-            tags=[Tag(kind=EpisodeFile.TAG_KIND, name=EpisodeFile.TAG_NAME_DATA, value=episode.dict())]
+            tags=[Tag(kind=EpisodeFile.TAG_KIND, name=EpisodeFile.TAG_NAME_DATA, value=rss_episode.dict())]
         )
         return EpisodeFile(file=file)
 

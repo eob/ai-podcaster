@@ -4,19 +4,20 @@ from typing import Optional, Union, List, Tuple
 
 from pydantic import Field
 from steamship.base.model import CamelModel
-
-from data.podcast_episode import RssEpisode
+from steamship.data import TagKind
+from steamship.data.tags.tag_constants import TagValueKey
+from data.podcast_episode import RssEpisode, EpisodeFile
 from data.utils import xmlify
 
 from typing import Optional, Union, List, Tuple, cast
 
 from steamship import File, Steamship, Block, Tag, DocTag, SteamshipError
-from data.rss import Episode, Feed
 
 
 class RssFeed(CamelModel):
     """Pydantic object that represents an RSS Feed."""
 
+    guid: Optional[str] = Field(None, description="GUID of the feed.")
     title: Optional[str] = Field(None, description="Name of the feed.")
     web_url: Optional[str] = Field(None, description="Web URL of the feed.")
     language: Optional[str] = Field(None, description="Language of the feed.")
@@ -59,6 +60,7 @@ class FeedFile:
 
     file: File
     TAG_KIND = "feed"
+    TAG_GUID_KIND = "feed-guid"
 
     def __init__(self, file: File):
         self.file = file
@@ -77,41 +79,51 @@ class FeedFile:
                 return tag
         return None
 
-    def feed_obj(self) -> Feed:
+    def feed_obj(self) -> RssFeed:
         """Returns the Feed object stored in this file."""
         tag = self.feed_tag()
         if tag is not None:
-            return Feed.parse_obj(tag.value)
-        return Feed()
+            return RssFeed.parse_obj(tag.value)
+        return RssFeed()
 
     @staticmethod
     def create(
         client: Steamship,
         base_url: str,
-        feed: Optional[Feed] = None,
+        rss_feed: Optional[RssFeed] = None,
     ) -> "FeedFile":
         # Only allow one per workspace
         files = File.query(client, f'filetag and kind "{FeedFile.TAG_KIND}"')
         if files and files.files and len(files.files) > 0:
             raise SteamshipError("This package is designed to host only one Podcast feed per workspace.")
 
-        feed = feed or Feed()
+        rss_feed = rss_feed or RssFeed()
 
         blocks = []
         blocks.append(Block(text="This file represents a podcast feed."))
 
+        tags = [Tag(kind=FeedFile.TAG_KIND, value=rss_feed.dict())]
+        if rss_feed and rss_feed.guid:
+            tags.append(Tag(kind=FeedFile.TAG_GUID_KIND, name=rss_feed.guid))
+        if rss_feed and rss_feed.title:
+            tags.append(Tag(kind=TagKind.DOCUMENT, name=DocTag.TITLE, value={TagValueKey.STRING_VALUE: rss_feed.guid}))
+
         file = File.create(
             client,
             blocks=blocks,
-            tags=[Tag(kind=FeedFile.TAG_KIND, value=feed.dict())]
+            tags=tags
         )
 
         return FeedFile(file=file)
 
     @staticmethod
-    def get(client: Steamship, base_url: str) -> "FeedFile":
-        files = File.query(client, f'filetag and kind "{FeedFile.TAG_KIND}"')
+    def get_or_create(client: Steamship, base_url: str, rss_feed: Optional[RssFeed] = None,) -> "FeedFile":
+        query = f'filetag and kind "{FeedFile.TAG_KIND}"'
+        if rss_feed and rss_feed.guid:
+            query = f'filetag and kind "{FeedFile.TAG_GUID_KIND}" and name "{rss_feed.guid}"'
+
+        files = File.query(client, query)
         if files and files.files and len(files.files) > 0:
             return FeedFile(files.files[0])
         else:
-            return FeedFile.create(client, base_url=base_url)
+            return FeedFile.create(client, base_url=base_url, rss_feed=rss_feed)
