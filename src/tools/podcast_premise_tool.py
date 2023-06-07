@@ -1,7 +1,7 @@
 import json
-from typing import List
+from typing import List, Union, Any
 from pydantic import BaseModel, Field
-from steamship import Block, Steamship
+from steamship import Block, Steamship, Task
 from repl import ToolREPL
 from steamship.agents.schema import AgentContext, Tool
 from steamship.agents.utils import get_llm, with_llm
@@ -9,8 +9,16 @@ from steamship.agents.llms import OpenAI
 from steamship.agents.tools.text_generation import JsonObjectGeneratorTool
 from steamship.utils.kv_store import KeyValueStore
 
-class PodcastPremiseTool(JsonObjectGeneratorTool):  
-    kv_store: KeyValueStore
+from tools.tool_cache import ToolCache
+
+
+class PodcastPremiseTool(JsonObjectGeneratorTool):
+    cache: ToolCache = Field(None, exclude=True)
+
+    class Config:
+        """Pydantic config."""
+        arbitrary_types_allowed = True
+        """Permit the ToolCache object."""
 
     class Output(BaseModel):
         podcast_name: str = Field()
@@ -40,36 +48,33 @@ class PodcastPremiseTool(JsonObjectGeneratorTool):
         """Parses the final output"""
         return PodcastPremiseTool.Output.parse_obj(json.loads(block.text))
 
-    def __init__(self, kv_store: KeyValueStore):
-        self.kv_store = kv_store
-
-    def get_cached_result_for(self, Block, context: AgentContext) -> Union[List[Block], Task[Any]]:
-        """Returns the cached result for the block."""
-
-        self.kv_store.get(f"ToolCache-{self.name}")
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.cache = ToolCache(self.name)
 
     def run(self, tool_input: List[Block], context: AgentContext) -> Union[List[Block], Task[Any]]:
+        """Run the tool, caching output."""
+        output = []
 
-        prompt = DEFAULT_PROMPT.format(
-            podcast_title=episode_premise.podcast_name,
-            podcast_description=episode_premise.podcast_description,
-            episode_title=episode_premise.episode_name,
-            episode_description=episode_premise.episode_description,
-        )
+        for block in tool_input:
+            cached_output = self.cache.get(block, context)
+            if cached_output:
+                output.append(cached_output)
+            else:
+                output_blocks = super().run([block], context)
+                if len(output_blocks):
+                    output_block = output_blocks[0]
+                    self.cache.set(block, output_block, context)
+                    output.append(output_block)
 
-        blocks = llm.complete(prompt, stop="THE END")
-        block = blocks[0]
-
-        d = episode_premise.dict()
-        d["script"] = block.text
-        print(block.text)
-
-        block.text = json.dumps(d)
-        return [block]
+        return output
 
 if __name__ == "__main__":
+    """Note that the temporary workspace will mean that a DIFFERENT cache is used each time!
+    
+    To see the cache in action, provide a second (or third) input that is identical to the tool within the REPL.
+    """
     with Steamship.temporary_workspace() as client:
-        kv_store = KeyValueStore()
-        ToolREPL(PodcastPremiseTool(kv_store)).run_with_client(
+        ToolREPL(PodcastPremiseTool()).run_with_client(
             client=client, context=with_llm(llm=OpenAI(client=client))
         )
