@@ -1,5 +1,5 @@
 from typing import List, Union, Any
-from steamship import Steamship, Block, Task
+from steamship import Steamship, Block, Task, SteamshipError
 from repl import ToolREPL
 import json
 from pydantic import Field
@@ -9,8 +9,7 @@ from steamship.agents.llms import OpenAI
 from tools.podcast_premise_tool import PodcastPremiseTool
 from steamship.agents.tools.text_generation import JsonObjectGeneratorTool
 
-class PodcastEpisodePremiseTool(JsonObjectGeneratorTool):    
-    kv_store: KeyValueStore
+class PodcastEpisodePremiseTool(JsonObjectGeneratorTool):
 
     class Output(PodcastPremiseTool.Output):
         episode_name: str = Field()
@@ -38,16 +37,20 @@ class PodcastEpisodePremiseTool(JsonObjectGeneratorTool):
     ]
 
     def run(self, tool_input: List[Block], context: AgentContext) -> Union[List[Block], Task[Any]]:
-        # Pull the premise.
-        # TODO: This reloads the previously generated one.
-        premise_tool = PodcastPremiseTool(self.kv_store)
-        premise_blocks = premise_tool.run([], context)
+        premise_tool = PodcastPremiseTool()
+        premise_blocks = premise_tool.run([
+            Block(text="")  # An input, even blank, required to produce output.
+        ], context)
+
+        if not len(premise_blocks):
+            raise SteamshipError(message="Podcast Premise tool did not return a podcast premise.")
+
         podcast_premise: PodcastPremiseTool.Output = premise_tool.parse_final_output(premise_blocks[0])
                 
         # Set the prefix fields
         self.new_row_prefix_fields = [podcast_premise.podcast_name]
         
-        # Now run the promopt
+        # Now run the prompt
         blocks = super().run(tool_input, context)
 
         # To make things easier we're going to fold in the output from the PodcastPremiseTool into 
@@ -65,12 +68,8 @@ class PodcastEpisodePremiseTool(JsonObjectGeneratorTool):
         print(block.text)
         return PodcastEpisodePremiseTool.Output.parse_obj(json.loads(block.text))
 
-    def __init__(self, kv_store: KeyValueStore):
-        self.kv_store = kv_store
-
 if __name__ == "__main__":
     with Steamship.temporary_workspace() as client:
-        kv_store = KeyValueStore()
-        ToolREPL(PodcastEpisodePremiseTool(kv_store)).run_with_client(
+        ToolREPL(PodcastEpisodePremiseTool()).run_with_client(
             client=client, context=with_llm(llm=OpenAI(client=client))
         )
